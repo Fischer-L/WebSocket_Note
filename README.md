@@ -122,7 +122,7 @@
   
   [2] https://github.com/websockets/ws/blob/d871bdfdc806122862ee5e2b781989b576771caf/doc/ws.md
   
-* In websockets/ws/lib/websocket-server.js [1]
+* In websockets/ws/lib/websocket-server.js [1], it performs the real HTTP Upgrade handshake for WebSocket
   ```js
   /**
    * Handle a HTTP Upgrade request.
