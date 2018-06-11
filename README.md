@@ -2,25 +2,109 @@
 
 ## How Node socket.io establishes a websocket connect
 
-* engine.io inside socket.io does the jobs of transport-based cross-browser/cross-device bi-directional websocket communications.
-
-  * On the server
+* Because the establishment of WebSocket relies on HTTP Upgrade request so ...
+  * On the server, create a HTTP server, then create a WebSocket server based on that.
   ```js
-  var engine = require('engine.io');
-  var server = new engine.Server();
-
-  server.on('connection', function(socket){
-    socket.send('hi');
+  var app = require('express')();
+  var http = require('http').Server(app);
+  var io = require('socket.io')(http);
+  
+  io.on('connection', function(socket){
+    console.log('a user connected');
   });
 
-  // When a HTTP Upgrade request comes in, delegate it to the `engine.io` server.
-  httpServer.on('upgrade', function(req, socket, head){
-    server.handleUpgrade(req, socket, head);
-  });
-  httpServer.on('request', function(req, res){
-    server.handleRequest(req, res);
+  http.listen(3000, function(){
+    console.log('listening on *:3000');
   });
   ```
+
+* In socket.io/lib/index.js,
+  * Create the WebSocket server instance
+  ```js
+  function Server(srv, opts){
+    // ... ...
+    if (srv) this.attach(srv, opts);
+  }
+  ```
+  
+  * Attach/Listen to that incoming HTTP request
+  ```js
+  Server.prototype.listen = Server.prototype.attach = function(srv, opts) {
+    // ... ...
+    self.initEngine(srv, opts);
+    // ... ...
+  }
+  
+  Server.prototype.initEngine = function(srv, opts){
+    // initialize engine (borrow the tranport ability from engine.io
+    debug('creating engine.io instance with opts %j', opts);
+    this.eio = engine.attach(srv, opts);
+    
+    // ... ...
+
+    // bind to engine "connection" events
+    this.bind(this.eio);
+  };
+  
+  Server.prototype.bind = function(engine){
+    this.engine = engine;
+    this.engine.on('connection', this.onconnection.bind(this));
+    return this;
+  };
+  ```
+  
+  * After the connection established(including all jobs in the below steps), create a client represents an incoming transport (engine.io) connection
+  ```js
+  /**
+   * Called with each incoming transport connection.
+   *
+   * @param {engine.Socket} conn
+   * @return {Server} self
+   * @api public
+   */
+  Server.prototype.onconnection = function(conn){
+    debug('incoming connection with id %s', conn.id);
+    var client = new Client(this, conn);
+    client.connect('/');
+    return this;
+  };
+  ```
+
+* engine.io inside socket.io does the jobs of transport-based cross-browser/cross-device bi-directional websocket communications.
+
+  * In engine.io/lib/server.js, intercept the HTTP Upgrade request for WebSocket
+  ```js
+  /**
+   * Captures upgrade requests for a http.Server.
+   *
+   * @param {http.Server} server
+   * @param {Object} options
+   * @api public
+   */
+  Server.prototype.attach = function (server, options) {
+    // ... ...
+    
+    // Listen to the HTTP Upgrade request
+    if (~self.transports.indexOf('websocket')) {
+      server.on('upgrade', function (req, socket, head) {
+        if (check(req)) {
+          self.handleUpgrade(req, socket, head);
+        } else if (false !== options.destroyUpgrade) {
+          // default node behavior is to disconnect when no handlers
+          // but by adding a handler, we prevent that
+          // and if no eio thing handles the upgrade
+          // then the socket needs to die!
+          setTimeout(function () {
+            if (socket.writable && socket.bytesWritten <= 0) {
+              return socket.end();
+            }
+          }, destroyUpgradeTimeout);
+        }
+      });
+    }
+  }
+  ```
+  https://github.com/socketio/engine.io/blob/c6247514e231566f70f074b14dccaae4c8aeda13/lib/server.js#L476
   
   * In engine.io/lib/server.js [1] : It borrows from WebSocket[2] project.
   
@@ -125,7 +209,7 @@
     socket.write(headers.concat('\r\n').join('\r\n'));
     socket.removeListener('error', socketOnError);
     
-    // Build and store this WebSocket instance
+    // Build and pass on this WebSocket instance
     ws.setSocket(socket, head, this.options.maxPayload);
     if (this.clients) {
       this.clients.add(ws);
