@@ -242,4 +242,48 @@
   [2] https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_servers
 
 
+## How Node socket.io sends a websocket message
+* On the server when we send a message to the client on the end of the socket.
+  ```js
+  io.on('connection', function(socket){
+    socket.emit("server_msg", { body: "The message body" });
+  });
+  ```
+
+* In socketio/socket.io/lib/socket.js,
+  ```js
+   /**
+   * Emits to this client.
+   * NOTICE: In fact this `emit` is overriden from the EventEmitter class
+   *
+   * @return {Socket} self
+   * @api public
+   */
+  Socket.prototype.emit = function(ev){
+    // ... ...
+    
+    // This is the packet which will be sent to the client.
+    var packet = {
+      type: (this.flags.binary !== undefined ? this.flags.binary : hasBin(args)) ? parser.BINARY_EVENT : parser.EVENT,
+      data: args
+    };
+    
+    // ... ...
+    
+    if (rooms.length || flags.broadcast) {
+      // Broadcast the packet to sockets in the same rooms.
+      // P.S: "Room" is a concept that groups sockets together in socket.io
+      this.adapter.broadcast(packet, {
+        except: [this.id],
+        rooms: rooms,
+        flags: flags
+      });
+    } else {
+      // dispatch packet
+      this.packet(packet, flags);
+    }
+    return this;
+  }
+  ```
+
 
