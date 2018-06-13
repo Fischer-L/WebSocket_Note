@@ -342,45 +342,75 @@
     };
     ```
     
- * Flush the packet
- ```js
- Socket.prototype.sendPacket = function (type, data, options, callback) {
-   // ... ...
+  * Flush the packet
+  ```js
+  Socket.prototype.sendPacket = function (type, data, options, callback) {
+    // ... ...
+
+    // Still the socket is open?
+    if ('closing' !== this.readyState && 'closed' !== this.readyState) {
+      // ... ...
+
+      // Save the packet to the write buffer array.
+      // Does this imply the async concept?
+      this.writeBuffer.push(packet);
+
+      // ... ...
+
+      this.flush();
+    }
+  }
+
+  Socket.prototype.flush = function () {
+    // Safe to flush?
+    if ('closed' !== this.readyState && this.transport.writable && this.writeBuffer.length) {
+      // ... ...
+
+      var wbuf = this.writeBuffer;
+      this.writeBuffer = [];
+
+      // ... ...
+
+      // `this.transport` is an instance of the subclass of Transport in engien.io,
+      // which means the transport method, could be WebSocket or Polling.
+      // This is the value of socket.io. It can seamless fallback to Polling if no WebSocket.
+      this.transport.send(wbuf);
+      this.emit('drain');
+      this.server.emit('drain', this);
+    }
+  };
+  ```
+ 
+ * In socketio/engine.io/lib/transports/websocket.js (assume our client supports WebSocket)
+   ```js
+   WebSocket.prototype.send = function (packets) {
+    var self = this;
+
+    for (var i = 0; i < packets.length; i++) {
+      var packet = packets[i];
+      // Encode packets into the engine.io-defined format then send one by one
+      parser.encodePacket(packet, self.supportsBinary, send);
+    }
+
+    function send (data) {
+      // ... ...
+      
+      // NOTICE: Sync or Async?
+      // This implies taht must wait for one packet sent then proceed to next one.
+      // However if the below `self.socket.send` is async, we might re-enter again
+      // before `writable` gets `true` onEnd...
+      self.writable = false;
+      // `sokcet` is an instance of WebSocket in ws
+      self.socket.send(data, opts, onEnd);
+    }
+    
+    function onEnd (err) {
+     if (err) return self.onError('write error', err.stack);
+     self.writable = true;
+     self.emit('drain');
+   }
+  };
+   ```
    
-   // Still the socket is open?
-   if ('closing' !== this.readyState && 'closed' !== this.readyState) {
-     // ... ...
-     
-     // Save the packet to the write buffer array.
-     // Does this imply the async concept?
-     this.writeBuffer.push(packet);
-     
-     // ... ...
-     
-     this.flush();
-   }
- }
- 
- Socket.prototype.flush = function () {
-   // Safe to flush?
-   if ('closed' !== this.readyState && this.transport.writable && this.writeBuffer.length) {
-     // ... ...
-     
-     var wbuf = this.writeBuffer;
-     this.writeBuffer = [];
-     
-     // ... ...
-     
-     // `this.transport` is an instance of the subclass of Transport in engien.io,
-     // which means the transport method, could be WebSocket or Polling
-     this.transport.send(wbuf);
-     this.emit('drain');
-     this.server.emit('drain', this);
-   }
- };
- ```
- 
- 
- 
  
 
