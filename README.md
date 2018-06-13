@@ -552,5 +552,18 @@
 
   [2] https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_servers
 
-
+* Send out the WebSocke frame to the client through a real nodeJs socket
+  ```js
+  sendFrame (list, cb) {
+    // This `_socket` is an instance of the net.Socket in nodeJs, see [1].
+    if (list.length === 2) {
+      this._socket.write(list[0]);
+      this._socket.write(list[1], cb);
+    } else {
+      this._socket.write(list[0], cb);
+    }
+  }
+  ```
+  [1] https://nodejs.org/api/net.html#net_socket_write_data_encoding_callback
+  
 
