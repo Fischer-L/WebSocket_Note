@@ -410,7 +410,147 @@
      self.emit('drain');
    }
   };
-   ```
+  ```
    
- 
+* In websockets/ws/lib/websocket.js
+  ```js
+  send (data, options, cb) {
+    // ... ...
+    
+    // `_sender` is an instance of Sender class in ws
+    this._sender.send(data || constants.EMPTY_BUFFER, opts, cb);
+  }
+  ```
+
+* websockets/ws/lib/sender.js
+  * Make sure the data being sent is a nodejs Buffer (binary data)
+  ```js
+  send (data, options, cb) {
+    // ... ...
+    
+    // Make sure the data being sent is a nodejs Buffer (binary data)
+    if (!Buffer.isBuffer(data)) {
+      if (data instanceof ArrayBuffer) {
+        data = Buffer.from(data);
+      } else if (ArrayBuffer.isView(data)) {
+        data = viewToBuffer(data);
+      } else {
+        data = Buffer.from(data);
+        readOnly = false;
+      }
+    }
+    
+    // ... ...
+    
+    if (perMessageDeflate) {
+      // The case sending compressed data.
+      // In fact the WebSocket standard has a standard for this case:
+      // https://tools.ietf.org/html/draft-ietf-hybi-permessage-compression-19
+      
+      // ... ...
+    } else {
+      this.sendFrame(Sender.frame(data, {
+        fin: options.fin,
+        rsv1: false,
+        opcode,
+        mask: options.mask,
+        readOnly
+      }), cb);
+    }
+  }
+  ```
+
+  * Frame the outgoing data per the HyBi WebSocket protocol. This step is important in that it turns our binary data into a WebSocket frame[1]. See the Frame section on MDN for detail[2].
+  ```js
+  /**
+   * Frames a piece of data according to the HyBi WebSocket protocol.
+   *
+   * @param {Buffer} data The data to frame
+   * @param {Object} options Options object
+   * @param {Number} options.opcode The opcode
+   * @param {Boolean} options.readOnly Specifies whether `data` can be modified
+   * @param {Boolean} options.fin Specifies whether or not to set the FIN bit
+   * @param {Boolean} options.mask Specifies whether or not to mask `data`
+   * @param {Boolean} options.rsv1 Specifies whether or not to set the RSV1 bit
+   * @return {Buffer[]} The framed data as a list of `Buffer` instances
+   * @public
+   */
+  static frame (data, options) {
+    const merge = data.length < 1024 || (options.mask && options.readOnly);
+    var offset = options.mask ? 6 : 2;
+    var payloadLength = data.length;
+
+    if (data.length >= 65536) {
+      offset += 8;
+      payloadLength = 127;
+    } else if (data.length > 125) {
+      offset += 2;
+      payloadLength = 126;
+    }
+
+    const target = Buffer.allocUnsafe(merge ? data.length + offset : offset);
+
+    target[0] = options.fin ? options.opcode | 0x80 : options.opcode;
+    if (options.rsv1) target[0] |= 0x40;
+
+    if (payloadLength === 126) {
+      target.writeUInt16BE(data.length, 2);
+    } else if (payloadLength === 127) {
+      target.writeUInt32BE(0, 2);
+      target.writeUInt32BE(data.length, 6);
+    }
+
+    if (!options.mask) {
+      target[1] = payloadLength;
+      if (merge) {
+        data.copy(target, offset);
+        return [target];
+      }
+
+      return [target, data];
+    }
+
+    const mask = crypto.randomBytes(4);
+
+    target[1] = payloadLength | 0x80;
+    target[offset - 4] = mask[0];
+    target[offset - 3] = mask[1];
+    target[offset - 2] = mask[2];
+    target[offset - 1] = mask[3];
+
+    if (merge) {
+      bufferUtil.mask(data, mask, target, offset, data.length);
+      return [target];
+    }
+
+    bufferUtil.mask(data, mask, data, 0, data.length);
+    return [target, data];
+  }
+  ```
+  
+  [1] WebSocket frame format:
+  ```
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-------+-+-------------+-------------------------------+
+     |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
+     |I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
+     |N|V|V|V|       |S|             |   (if payload len==126/127)   |
+     | |1|2|3|       |K|             |                               |
+     +-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
+     |     Extended payload length continued, if payload len == 127  |
+     + - - - - - - - - - - - - - - - +-------------------------------+
+     |                               |Masking-key, if MASK set to 1  |
+     +-------------------------------+-------------------------------+
+     | Masking-key (continued)       |          Payload Data         |
+     +-------------------------------- - - - - - - - - - - - - - - - +
+     :                     Payload Data continued ...                :
+     + - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
+     |                     Payload Data continued ...                |
+     +---------------------------------------------------------------+
+  ```
+
+  [2] https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_servers
+
+
 
