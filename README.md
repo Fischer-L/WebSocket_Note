@@ -331,3 +331,56 @@
       writeToEngine(packet);
     };
   ```
+
+* In socketio/engine.io/lib/socket.js,
+  * `write` actually calls `sendPacket`
+    ```js
+    Socket.prototype.send =
+    Socket.prototype.write = function (data, options, callback) {
+      this.sendPacket('message', data, options, callback);
+      return this;
+    };
+    ```
+    
+ * Flush the packet
+ ```js
+ Socket.prototype.sendPacket = function (type, data, options, callback) {
+   // ... ...
+   
+   // Still the socket is open?
+   if ('closing' !== this.readyState && 'closed' !== this.readyState) {
+     // ... ...
+     
+     // Save the packet to the write buffer array.
+     // Does this imply the async concept?
+     this.writeBuffer.push(packet);
+     
+     // ... ...
+     
+     this.flush();
+   }
+ }
+ 
+ Socket.prototype.flush = function () {
+   // Safe to flush?
+   if ('closed' !== this.readyState && this.transport.writable && this.writeBuffer.length) {
+     // ... ...
+     
+     var wbuf = this.writeBuffer;
+     this.writeBuffer = [];
+     
+     // ... ...
+     
+     // `this.transport` is an instance of the subclass of Transport in engien.io,
+     // which means the transport method, could be WebSocket or Polling
+     this.transport.send(wbuf);
+     this.emit('drain');
+     this.server.emit('drain', this);
+   }
+ };
+ ```
+ 
+ 
+ 
+ 
+
