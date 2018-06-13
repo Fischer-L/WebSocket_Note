@@ -251,39 +251,83 @@
   ```
 
 * In socketio/socket.io/lib/socket.js,
-  ```js
-   /**
-   * Emits to this client.
-   * NOTICE: In fact this `emit` is overriden from the EventEmitter class
-   *
-   * @return {Socket} self
-   * @api public
-   */
-  Socket.prototype.emit = function(ev){
-    // ... ...
-    
-    // This is the packet which will be sent to the client.
-    var packet = {
-      type: (this.flags.binary !== undefined ? this.flags.binary : hasBin(args)) ? parser.BINARY_EVENT : parser.EVENT,
-      data: args
-    };
-    
-    // ... ...
-    
-    if (rooms.length || flags.broadcast) {
-      // Broadcast the packet to sockets in the same rooms.
-      // P.S: "Room" is a concept that groups sockets together in socket.io
-      this.adapter.broadcast(packet, {
-        except: [this.id],
-        rooms: rooms,
-        flags: flags
-      });
-    } else {
-      // dispatch packet
-      this.packet(packet, flags);
+  * Socket.prototype.emit
+    ```js
+     /**
+     * Emits to this client.
+     * NOTICE: In fact this `emit` is overriden from the EventEmitter class
+     *
+     * @return {Socket} self
+     * @api public
+     */
+    Socket.prototype.emit = function(ev){
+      // ... ...
+
+      // This is the packet which will be sent to the client.
+      var packet = {
+        type: (this.flags.binary !== undefined ? this.flags.binary : hasBin(args)) ? parser.BINARY_EVENT : parser.EVENT,
+        data: args
+      };
+
+      // ... ...
+
+      if (rooms.length || flags.broadcast) {
+        // Broadcast the packet to sockets in the same rooms.
+        // P.S: "Room" is a concept that groups sockets together in socket.io
+        this.adapter.broadcast(packet, {
+          except: [this.id],
+          rooms: rooms,
+          flags: flags
+        });
+      } else {
+        // dispatch packet
+        this.packet(packet, flags);
+      }
+      return this;
     }
-    return this;
-  }
+    ```
+
+  * Socket.prototype.packet
+  ```js
+  /**
+   * Writes a packet.
+   *
+   * @param {Object} packet object
+   * @param {Object} opts options
+   * @api private
+   */
+  Socket.prototype.packet = function(packet, opts){
+    packet.nsp = this.nsp.name;
+    opts = opts || {};
+    opts.compress = false !== opts.compress;
+    // `client` represents the client of this socket associated with
+    this.client.packet(packet, opts);
+  };
   ```
+  
+* In socketio/socket.io/lib/client.js, it eventually turns to engine.io to send out the packet
+  ```js
+    /**
+     * Writes a packet to the transport.
+     *
+     * @param {Object} packet object
+     * @param {Object} opts
+     * @api private
+     */
+    Client.prototype.packet = function(packet, opts){
+      opts = opts || {};
+      var self = this;
+      // this writes to the actual connection
+      function writeToEngine(encodedPackets) {
+        if (opts.volatile && !self.conn.transport.writable) return;
+        for (var i = 0; i < encodedPackets.length; i++) {
+          // `self.conn` is an instance of Socket in engine.io
+          self.conn.write(encodedPackets[i], { compress: opts.compress });
+        }
+      }
 
-
+      // ... ...
+      
+      writeToEngine(packet);
+    };
+  ```
