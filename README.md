@@ -383,33 +383,33 @@
  
  * In socketio/engine.io/lib/transports/websocket.js (assume our client supports WebSocket)
    ```js
-   WebSocket.prototype.send = function (packets) {
-    var self = this;
+    WebSocket.prototype.send = function (packets) {
+     var self = this;
 
-    for (var i = 0; i < packets.length; i++) {
-      var packet = packets[i];
-      // Encode packets into the engine.io-defined format then send one by one
-      parser.encodePacket(packet, self.supportsBinary, send);
-    }
+     for (var i = 0; i < packets.length; i++) {
+       var packet = packets[i];
+       // Encode packets into the engine.io-defined format then send one by one
+       parser.encodePacket(packet, self.supportsBinary, send);
+     }
 
-    function send (data) {
-      // ... ...
-      
-      // NOTICE: Sync or Async?
-      // This implies taht must wait for one packet sent then proceed to next one.
-      // However if the below `self.socket.send` is async, we might re-enter again
-      // before `writable` gets `true` onEnd...
-      self.writable = false;
-      // `sokcet` is an instance of WebSocket in ws
-      self.socket.send(data, opts, onEnd);
-    }
-    
-    function onEnd (err) {
-     if (err) return self.onError('write error', err.stack);
-     self.writable = true;
-     self.emit('drain');
-   }
-  };
+     function send (data) {
+       // ... ...
+
+       // NOTICE: Sync or Async?
+       // This implies taht must wait for one packet sent then proceed to next one.
+       // However if the below `self.socket.send` is async, we might re-enter again
+       // before `writable` gets `true` onEnd...
+       self.writable = false;
+       // `sokcet` is an instance of WebSocket in ws
+       self.socket.send(data, opts, onEnd);
+     }
+
+     function onEnd (err) {
+      if (err) return self.onError('write error', err.stack);
+      self.writable = true;
+      self.emit('drain');
+     }
+   };
   ```
    
 * In websockets/ws/lib/websocket.js
