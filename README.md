@@ -84,7 +84,26 @@
   Server.prototype.attach = function (server, options) {
     // ... ...
     
-    // Listen to the HTTP Upgrade request
+    // Remove then cache http request listeners so we can intercept
+    // the request for WebSocket later.
+    // In NodeJs, http.Server inherits net.Server inherits EventEmitter,
+    // The below `server.listeners` comes from EventEmitter.
+    var listeners = server.listeners('request').slice(0);
+    server.removeAllListeners('request');
+    server.on('close', self.close.bind(self));
+    server.on('listening', self.init.bind(self));
+    
+    // Add request handler to intercept http requests
+    server.on('request', function (req, res) {
+      // ... ...
+      
+      // Not our business. Pass the http request to cached listeners
+      for (var i = 0, l = listeners.length; i < l; i++) {
+        listeners[i].call(server, req, res);
+      }
+    });
+    
+    // Listen to the HTTP Upgrade request for WebSocket
     if (~self.transports.indexOf('websocket')) {
       server.on('upgrade', function (req, socket, head) {
         if (check(req)) {
