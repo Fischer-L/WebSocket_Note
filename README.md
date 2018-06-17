@@ -639,16 +639,19 @@
  * Start the data-paring loop. This loop is to parse a websocket frame. Basically it is a state machine as below:
    ```js
    //
-   //            +----------------------------------------------------+
-   //            |                                                    |
-   //            V                                                    |
-   // Initial: GET_INFO --> GET_PAYLOAD_LENGTH_16 -------+            |
-   //            |                                       |            |
-   //            |                                       V            |
-   //            +--------> GET_PAYLOAD_LENGTH_64 --> GET_MASK --> GET_DATA
-   //            |                                       ^            ^
-   //            |                                       |            |
-   //            +---------------------------------------+------------+
+   //            +------------------------------------------------------------+
+   //            |                                                            |
+   //            |                    +-------------------------------+       |
+   //            V                    |                               |       |
+   // Initial: GET_INFO --> GET_PAYLOAD_LENGTH_16 -------+            |       |
+   //            |                                       |            |       |
+   //            |                                       V            v       |
+   //            +--------> GET_PAYLOAD_LENGTH_64 --> GET_MASK --> GET_DATA --+
+   //            |                    |                  ^            ^
+   //            |                    |                  |            |
+   //            +--------------------+------------------+------------+
+   //                                 |                               |
+   //                                 +-------------------------------+
    //
    startLoop (cb) {
      var err;
