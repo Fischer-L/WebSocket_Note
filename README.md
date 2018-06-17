@@ -413,14 +413,14 @@
   ```
    
 * In websockets/ws/lib/websocket.js
-  ```js
+  
    send (data, options, cb) {
      // ... ...
     
      // `_sender` is an instance of Sender class in ws
      this._sender.send(data || constants.EMPTY_BUFFER, opts, cb);
    }
-  ```
+  
 
 * websockets/ws/lib/sender.js
   * Make sure the data being sent is a nodejs Buffer (binary data)
