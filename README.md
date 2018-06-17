@@ -413,7 +413,7 @@
   
    
 * In websockets/ws/lib/websocket.js
-  ```
+  ```js
    send (data, options, cb) {
      // ... ...
     
