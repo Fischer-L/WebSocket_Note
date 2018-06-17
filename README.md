@@ -567,3 +567,118 @@
   [1] https://nodejs.org/api/net.html#net_socket_write_data_encoding_callback
   
 
+## How socket.io receives a websocket message
+* In websockets/ws/lib/websocket-server.js, when completing the HTTP websoscket upgrade
+  ```js
+  completeUpgrade (extensions, req, socket, head, cb) {
+    // ... ...
+    
+    const ws = new WebSocket(null);
+    
+    // ... ...
+    
+    // Get the nodeJs socket. Do the set up.
+    ws.setSocket(socket, head, this.options.maxPayload);
+    
+    // ... ...
+    
+    // engine.io will receive this websocket connection.
+    cb(ws);
+  }
+  ```
+
+* In websockets/ws/lib/websocket.js, 
+  * Setup to listen to the ndoeJs socket
+    ```js
+    /**
+     * Set up the socket and the internal resources.
+     *
+     * @param {net.Socket} socket The network socket between the server and client
+     * @param {Buffer} head The first packet of the upgraded stream
+     * @param {Number} maxPayload The maximum allowed message size
+     * @private
+     */
+    setSocket (socket, head, maxPayload) {
+      // ... ...
+
+      // The `receiver` in charge of processing the received websocket data.
+      receiver.on('message', receiverOnMessage);
+
+      // ... ...
+
+      // Listen to the ndoeJs socket.
+      socket.on('data', socketOnData);
+
+      // ... ...
+    }
+    ```
+  
+  * When data come in from a nodeJs socket, call the receiver setup above to process.
+    ```js
+    function socketOnData (chunk) {
+      // The `write` will eventually calls `_write` to "drain" the buffered chunk, see [1].
+      if (!this[kWebSocket]._receiver.write(chunk)) {
+        this.pause();
+      }
+    }
+    ```
+    [1] https://nodejs.org/api/stream.html#stream_writable_write_chunk_encoding_callback_1
+
+* In websockets/ws/lib/receiver.js
+  * Receive the buffered data
+   ```js
+    _write (chunk, encoding, cb) {
+     if (this._opcode === 0x08) return cb();
+
+     this._bufferedBytes += chunk.length;
+     this._buffers.push(chunk);
+     this.startLoop(cb);
+   }
+   ```
+ 
+ * Start the data-paring loop. This loop is to parse a websocket frame. Basically it is a state machine as below:
+   ```js
+   //
+   //            +----------------------------------------------------+
+   //            |                                                    |
+   //            V                                                    |
+   // Initial: GET_INFO --> GET_PAYLOAD_LENGTH_16 -------+            |
+   //            |                                       |            |
+   //            |                                       V            |
+   //            +--------> GET_PAYLOAD_LENGTH_64 --> GET_MASK --> GET_DATA
+   //            |                                       ^            ^
+   //            |                                       |            |
+   //            +---------------------------------------+------------+
+   //
+   startLoop (cb) {
+     var err;
+     this._loop = true;
+
+     do {
+       switch (this._state) {
+         case GET_INFO:
+           err = this.getInfo();
+           break;
+         case GET_PAYLOAD_LENGTH_16:
+           err = this.getPayloadLength16();
+           break;
+         case GET_PAYLOAD_LENGTH_64:
+           err = this.getPayloadLength64();
+           break;
+         case GET_MASK:
+           this.getMask();
+           break;
+         case GET_DATA:
+           err = this.getData(cb);
+           break;
+         default: // `INFLATING`
+           this._loop = false;
+           return;
+       }
+     } while (this._loop);
+
+     cb(err);
+   }
+   ```
+
+
