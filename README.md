@@ -288,22 +288,22 @@
     ```
 
   * Socket.prototype.packet
-  ```js
-  /**
-   * Writes a packet.
-   *
-   * @param {Object} packet object
-   * @param {Object} opts options
-   * @api private
-   */
-  Socket.prototype.packet = function(packet, opts){
-    packet.nsp = this.nsp.name;
-    opts = opts || {};
-    opts.compress = false !== opts.compress;
-    // `client` represents the client of this socket associated with
-    this.client.packet(packet, opts);
-  };
-  ```
+    ```js
+    /**
+     * Writes a packet.
+     *
+     * @param {Object} packet object
+     * @param {Object} opts options
+     * @api private
+     */
+    Socket.prototype.packet = function(packet, opts){
+      packet.nsp = this.nsp.name;
+      opts = opts || {};
+      opts.compress = false !== opts.compress;
+      // `client` represents the client of this socket associated with
+      this.client.packet(packet, opts);
+    };
+    ```
   
 * In socketio/socket.io/lib/client.js, it eventually turns to engine.io to send out the packet
   ```js
@@ -343,43 +343,43 @@
     ```
     
   * Flush the packet
-  ```js
-  Socket.prototype.sendPacket = function (type, data, options, callback) {
-    // ... ...
-
-    // Still the socket is open?
-    if ('closing' !== this.readyState && 'closed' !== this.readyState) {
+    ```js
+    Socket.prototype.sendPacket = function (type, data, options, callback) {
       // ... ...
 
-      // Save the packet to the write buffer array.
-      // Does this imply the async concept?
-      this.writeBuffer.push(packet);
+      // Still the socket is open?
+      if ('closing' !== this.readyState && 'closed' !== this.readyState) {
+        // ... ...
 
-      // ... ...
+        // Save the packet to the write buffer array.
+        // Does this imply the async concept?
+        this.writeBuffer.push(packet);
 
-      this.flush();
+        // ... ...
+
+        this.flush();
+      }
     }
-  }
 
-  Socket.prototype.flush = function () {
-    // Safe to flush?
-    if ('closed' !== this.readyState && this.transport.writable && this.writeBuffer.length) {
-      // ... ...
+    Socket.prototype.flush = function () {
+      // Safe to flush?
+      if ('closed' !== this.readyState && this.transport.writable && this.writeBuffer.length) {
+        // ... ...
 
-      var wbuf = this.writeBuffer;
-      this.writeBuffer = [];
+        var wbuf = this.writeBuffer;
+        this.writeBuffer = [];
 
-      // ... ...
+        // ... ...
 
-      // `this.transport` is an instance of the subclass of Transport in engien.io,
-      // which means the transport method, could be WebSocket or Polling.
-      // This is the value of socket.io. It can seamless fallback to Polling if no WebSocket.
-      this.transport.send(wbuf);
-      this.emit('drain');
-      this.server.emit('drain', this);
-    }
-  };
-  ```
+        // `this.transport` is an instance of the subclass of Transport in engien.io,
+        // which means the transport method, could be WebSocket or Polling.
+        // This is the value of socket.io. It can seamless fallback to Polling if no WebSocket.
+        this.transport.send(wbuf);
+        this.emit('drain');
+        this.server.emit('drain', this);
+      }
+    };
+    ```
  
  * In socketio/engine.io/lib/transports/websocket.js (assume our client supports WebSocket)
    ```js
@@ -410,17 +410,17 @@
       self.emit('drain');
      }
    };
-  ```
+  
    
 * In websockets/ws/lib/websocket.js
-  
+  ```
    send (data, options, cb) {
      // ... ...
     
      // `_sender` is an instance of Sender class in ws
      this._sender.send(data || constants.EMPTY_BUFFER, opts, cb);
    }
-  
+  ```
 
 * websockets/ws/lib/sender.js
   * Make sure the data being sent is a nodejs Buffer (binary data)
