@@ -755,3 +755,161 @@
       this._state = GET_INFO;
     }
     ```
+
+* In websockets/ws/lib/websocket.js, received the "message" event from the receiver, then notify the wewbsocket user that the message comes in
+  ```js
+  function receiverOnMessage (data) {
+    this[kWebSocket].emit('message', data);
+  }
+  ```
+* In socketio/engine.io/lib/transports/websocket.js,
+  * Listen to the ws websocket
+    ```js
+    function WebSocket (req) {
+      // ... ...
+      this.socket.on('message', this.onData.bind(this));
+      // ... ...
+    }
+    ```
+
+  * Pass on the message packet
+    ```js
+    WebSocket.prototype.onData = function (data) {
+      debug('received "%s"', data);
+      Transport.prototype.onData.call(this, data);
+    };
+    ```
+
+    * In socketio/engine.io/lib/transport.js,
+      ```js
+      Transport.prototype.onData = function (data) {
+        this.onPacket(parser.decodePacket(data));
+      };
+
+      Transport.prototype.onPacket = function (packet) {
+        this.emit('packet', packet);
+      };
+      ```
+
+* In socketio/engine.io/lib/socket.js,
+  * Listen to the websocket transport,
+    ```js
+    Socket.prototype.setTransport = function (transport) {
+      // ... ...
+      this.transport.on('packet', onPacket);
+      // ... ...
+    }
+    ```
+
+  * Pass on the message packet
+    ```js
+    Socket.prototype.onPacket = function (packet) {
+      if ('open' === this.readyState) {
+        // export packet event
+        debug('packet');
+        this.emit('packet', packet);
+
+        // ... ...
+
+        switch (packet.type) {
+          case 'ping':
+            debug('got ping');
+            this.sendPacket('pong');
+            this.emit('heartbeat');
+            break;
+
+          // ... ...
+
+          case 'message':
+            this.emit('data', packet.data);
+            this.emit('message', packet.data);
+            break;
+        }
+      } else {
+        debug('packet received with closed socket');
+      }
+    };
+    ```
+
+* In socketio/socket.io/lib/client.js,
+  * Listen to the engine.io socket
+    ```js
+    Client.prototype.setup = function(){
+      // ... ...
+
+      // The `decoder` is for the socket.io protocol
+      this.decoder.on('decoded', this.ondecoded);
+      this.conn.on('data', this.ondata);
+
+      // ... ...
+    }
+    ```
+
+  * Decode the packet data, then pass it on
+    ```js
+    Client.prototype.ondata = function(data){
+      // ... ...
+      
+      // OK, the decode process is async
+      this.decoder.add(data);
+
+      // ... ...
+    };
+
+    Client.prototype.ondecoded = function(packet) {
+      if (parser.CONNECT == packet.type) {
+        this.connect(url.parse(packet.nsp).pathname, url.parse(packet.nsp, true).query);
+      } else {
+        // ... ...
+
+        process.nextTick(function() {
+          socket.onpacket(packet);
+        });
+
+        // ... ...
+      }
+    };
+    ```
+
+* socketio/socket.io/lib/socket.js,
+  * Handle the packet case by case
+    ```js
+    Socket.prototype.onpacket = function(packet){
+      debug('got packet %j', packet);
+      switch (packet.type) {
+        case parser.EVENT:
+          this.onevent(packet);
+          break;
+
+        case parser.BINARY_EVENT:
+          this.onevent(packet);
+          break;
+
+        case parser.ACK:
+          this.onack(packet);
+          break;
+
+        case parser.BINARY_ACK:
+          this.onack(packet);
+          break;
+
+        case parser.DISCONNECT:
+          this.ondisconnect();
+          break;
+
+        case parser.ERROR:
+          this.onerror(new Error(packet.data));
+      }
+    };
+    ```
+
+  * Dispath the packet
+    ```js
+    Socket.prototype.onevent = function(packet){
+      var args = packet.data || [];
+
+      // ... ...
+
+      this.dispatch(args);
+    };
+    ```
