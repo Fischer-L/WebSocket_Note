@@ -626,62 +626,132 @@
 
 * In websockets/ws/lib/receiver.js
   * Receive the buffered data
-   ```js
+    ```js
     _write (chunk, encoding, cb) {
      if (this._opcode === 0x08) return cb();
 
      this._bufferedBytes += chunk.length;
      this._buffers.push(chunk);
      this.startLoop(cb);
-   }
-   ```
+    }
+    ```
  
- * Start the data-paring loop. This loop is to parse a websocket frame. Basically it is a state machine as below:
-   ```js
-   //
-   //            +------------------------------------------------------------+
-   //            |                                                            |
-   //            |                    +-------------------------------+       |
-   //            V                    |                               |       |
-   // Initial: GET_INFO --> GET_PAYLOAD_LENGTH_16 -------+            |       |
-   //            |                                       |            |       |
-   //            |                                       V            v       |
-   //            +--------> GET_PAYLOAD_LENGTH_64 --> GET_MASK --> GET_DATA --+
-   //            |                    |                  ^            ^
-   //            |                    |                  |            |
-   //            +--------------------+------------------+------------+
-   //                                 |                               |
-   //                                 +-------------------------------+
-   //
-   startLoop (cb) {
-     var err;
-     this._loop = true;
+   * Start the data-paring loop. This loop is to parse a websocket frame. Basically it is a state machine as below:
+     ```js
+     //
+     //            +------------------------------------------------------------+
+     //            |                                                            |
+     //            |                    +-------------------------------+       |
+     //            V                    |                               |       |
+     // Initial: GET_INFO --> GET_PAYLOAD_LENGTH_16 -------+            |       |
+     //            |                                       |            |       |
+     //            |                                       V            v       |
+     //            +--------> GET_PAYLOAD_LENGTH_64 --> GET_MASK --> GET_DATA --+
+     //            |                    |                  ^            ^
+     //            |                    |                  |            |
+     //            +--------------------+------------------+------------+
+     //                                 |                               |
+     //                                 +-------------------------------+
+     //
+     startLoop (cb) {
+       var err;
+       this._loop = true;
 
-     do {
-       switch (this._state) {
-         case GET_INFO:
-           err = this.getInfo();
-           break;
-         case GET_PAYLOAD_LENGTH_16:
-           err = this.getPayloadLength16();
-           break;
-         case GET_PAYLOAD_LENGTH_64:
-           err = this.getPayloadLength64();
-           break;
-         case GET_MASK:
-           this.getMask();
-           break;
-         case GET_DATA:
-           err = this.getData(cb);
-           break;
-         default: // `INFLATING`
-           this._loop = false;
-           return;
-       }
-     } while (this._loop);
+       do {
+         switch (this._state) {
+           case GET_INFO:
+             err = this.getInfo();
+             break;
+           case GET_PAYLOAD_LENGTH_16:
+             err = this.getPayloadLength16();
+             break;
+           case GET_PAYLOAD_LENGTH_64:
+             err = this.getPayloadLength64();
+             break;
+           case GET_MASK:
+             this.getMask();
+             break;
+           case GET_DATA:
+             err = this.getData(cb);
+             break;
+           default: // `INFLATING`
+             this._loop = false;
+             return;
+         }
+       } while (this._loop);
 
-     cb(err);
-   }
-   ```
+       cb(err);
+     }
+     ```
 
+  * Read the data after parsing
+    ```js
+    getData (cb) {
+      var data = constants.EMPTY_BUFFER;
 
+      if (this._payloadLength) {
+        // ... ...
+
+        //  Consumes `n` bytes from the buffered data.
+        data = this.consume(this._payloadLength);
+        if (this._masked) bufferUtil.unmask(data, this._mask);
+      }
+
+      // In a websocket frame, the opcdoe defines how to interpret the payload data.
+      // From 0x08(a close connection), it means a control frame.
+      // See https://tools.ietf.org/html/rfc6455 for details.
+      if (this._opcode > 0x07) return this.controlMessage(data);
+
+      if (this._compressed) {
+        this._state = INFLATING;
+        this.decompress(data, cb);
+        return;
+      }
+
+      if (data.length) {
+        //
+        // This message is not compressed so its lenght is the sum of the payload
+        // length of all fragments.
+        //
+        this._messageLength = this._totalPayloadLength;
+        this._fragments.push(data);
+      }
+
+      return this.dataMessage();
+    }
+    ```
+
+  * Tell outside the message arrives after reading the data
+    ```js
+    dataMessage () {
+      if (this._fin) { // Are wew finished?
+        // ... ...
+
+        // The 0x02 opcode means a binary frame
+        if (this._opcode === 2) {
+          var data;
+
+          if (this._binaryType === 'nodebuffer') {
+            data = toBuffer(fragments, messageLength);
+          } else if (this._binaryType === 'arraybuffer') {
+            data = toArrayBuffer(toBuffer(fragments, messageLength));
+          } else {
+            data = fragments;
+          }
+
+          this.emit('message', data);
+        } else {
+          const buf = toBuffer(fragments, messageLength);
+
+          if (!validation.isValidUTF8(buf)) {
+            this._loop = false;
+            return error(Error, 'invalid UTF-8 sequence', true, 1007);
+          }
+
+          this.emit('message', buf.toString());
+        }
+      }
+
+      this._state = GET_INFO;
+    }
+    ```
