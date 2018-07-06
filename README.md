@@ -903,7 +903,7 @@
     };
     ```
 
-  * Dispath the packet
+  * Dispatch incoming event to socket listeners
     ```js
     Socket.prototype.onevent = function(packet){
       var args = packet.data || [];
@@ -911,5 +911,14 @@
       // ... ...
 
       this.dispatch(args);
+    };
+    
+    Socket.prototype.dispatch = function(event){
+      // ... ...
+      
+      // This `emit` is `Emitter.prototype.emit`
+      emit.apply(self, event);
+      
+      // ... ...
     };
     ```
