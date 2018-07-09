@@ -1,6 +1,6 @@
 # WebSocket Note
 
-## How Node socket.io establishes a websocket connect
+## How Node socket.io establishes a websocket connection
 
 * Because the establishment of WebSocket relies on HTTP Upgrade request so ...
   * On the server, create a HTTP server, then create a WebSocket server based on that.
