@@ -1,5 +1,31 @@
 # WebSocket Note
 
+## Overview
+```
++---------+        Http         +-------------+  Use http   +------+
+|         |  requests/responses |             |  services   |      |
+| Network |<------------------->| http.Server |<------------| User |
+|         |             ^       |             |             |      |
++---------+             |       +-------------+             +------+
+    ^                   |                                      |
+    |                   | Intercept requests for               |
+    |                   | websokcet upgrade                    |
+    |                   |       +-------------+  Use websocket | 
+    | Websocket         +-------|             |  services      | 
+    | connection                |  Socket.IO  |<---------------+
+    +-------------------------->|             |
+                                +-------------+
+                                       |
+                   Borrow capabilities |
+          to handle websocket protocol |
+                                       v
+                               +----------------+
+                               |                |
+                               |  WebSocket/ws  |
+                               |                |
+                               +----------------+   
+``` 
+
 ## How Node socket.io establishes a websocket connection
 
 * Because the establishment of WebSocket relies on HTTP Upgrade request so ...
