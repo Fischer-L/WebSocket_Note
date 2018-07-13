@@ -652,7 +652,6 @@
       }
     }
     ```
-    [1] https://nodejs.org/api/stream.html#stream_writable_write_chunk_encoding_callback_1
 
 * In websockets/ws/lib/receiver.js
   * Receive the buffered data
@@ -665,6 +664,7 @@
      this.startLoop(cb);
     }
     ```
+    [1] https://nodejs.org/api/stream.html#stream_writable_write_chunk_encoding_callback_1
  
    * Start the data-paring loop. This loop is to parse a websocket frame. Basically it is a state machine as below:
      ```js
