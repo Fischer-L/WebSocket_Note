@@ -9,7 +9,7 @@
 +---------+          |          +-------------+             +------+
     ^                |                                         |
     |                | Intercept upgrade requests              |
-    |                | for websokcet                           |
+    |                | for websocket                           |
     |                |          +-------------+  Use websocket | 
     | Websocket      +----------|             |  services      | 
     | connection                |  Socket.IO  |<---------------+
