@@ -5,13 +5,13 @@
 +---------+        Http         +-------------+  Use http   +------+
 |         |  requests/responses |             |  services   |      |
 | Network |<------------------->| http.Server |<------------| User |
-|         |             ^       |             |             |      |
-+---------+             |       +-------------+             +------+
-    ^                   |                                      |
-    |                   | Intercept requests for               |
-    |                   | websokcet upgrade                    |
-    |                   |       +-------------+  Use websocket | 
-    | Websocket         +-------|             |  services      | 
+|         |          ^          |             |             |      |
++---------+          |          +-------------+             +------+
+    ^                |                                         |
+    |                | Intercept upgrade requests              |
+    |                | for websokcet                           |
+    |                |          +-------------+  Use websocket | 
+    | Websocket      +----------|             |  services      | 
     | connection                |  Socket.IO  |<---------------+
     +-------------------------->|             |
                                 +-------------+
